@@ -1,7 +1,6 @@
 package com.employee.management.service;
 
-import com.employee.management.dto.EmployeeRequestDto;
-import com.employee.management.dto.EmployeeResponseDto;
+import com.employee.management.dto.EmployeeDto;
 import com.employee.management.entity.Employee;
 import com.employee.management.exception.ResourceNotFoundException;
 import com.employee.management.repository.EmployeeRepository;
@@ -17,19 +16,19 @@ public class EmployeeService {
     @Autowired
     private EmployeeRepository employeeRepository;
 
-    public EmployeeResponseDto createEmployee(EmployeeRequestDto requestDto) {
+    public EmployeeDto createEmployee(EmployeeDto employeeDto) {
 
         Employee employee = new Employee();
 
-        employee.setName(requestDto.getName());
-        employee.setEmail(requestDto.getEmail());
-        employee.setDepartment(requestDto.getDepartment());
-        employee.setSalary(requestDto.getSalary());
-        employee.setPhone(requestDto.getPhone());
+        employee.setName(employeeDto.name());
+        employee.setEmail(employeeDto.email());
+        employee.setDepartment(employeeDto.department());
+        employee.setSalary(employeeDto.salary());
+        employee.setPhone(employeeDto.phone());
 
         Employee saved = employeeRepository.save(employee);
 
-        return new EmployeeResponseDto(
+        return new EmployeeDto(
                 saved.getId(),
                 saved.getName(),
                 saved.getEmail(),
@@ -41,7 +40,7 @@ public class EmployeeService {
         );
     }
 
-    public EmployeeResponseDto getById(Long id) {
+    public EmployeeDto getById(Long id) {
 
         Employee employee = employeeRepository.findById(id).orElseThrow(
                 () -> new ResourceNotFoundException(
@@ -49,7 +48,7 @@ public class EmployeeService {
                 )
         );
 
-        return new EmployeeResponseDto(
+        return new EmployeeDto(
                 employee.getId(),
                 employee.getName(),
                 employee.getEmail(),
@@ -61,11 +60,11 @@ public class EmployeeService {
         );
     }
 
-    public List<EmployeeResponseDto> getAllEmployees() {
+    public List<EmployeeDto> getAllEmployees() {
 
         return employeeRepository.findAll()
                 .stream()
-                .map(employee -> new EmployeeResponseDto(
+                .map(employee -> new EmployeeDto(
                         employee.getId(),
                         employee.getName(),
                         employee.getEmail(),
@@ -78,7 +77,10 @@ public class EmployeeService {
                 .collect(Collectors.toList());
     }
 
-    public EmployeeResponseDto updateEmployee( Long id,EmployeeRequestDto employeeRequest) {
+    public EmployeeDto updateEmployee(
+            Long id,
+            EmployeeDto employeeDto
+    ) {
 
         Employee existingEmployee = employeeRepository.findById(id).orElseThrow(
                 () -> new ResourceNotFoundException(
@@ -86,15 +88,15 @@ public class EmployeeService {
                 )
         );
 
-        existingEmployee.setName(employeeRequest.getName());
-        existingEmployee.setEmail(employeeRequest.getEmail());
-        existingEmployee.setDepartment(employeeRequest.getDepartment());
-        existingEmployee.setSalary(employeeRequest.getSalary());
-        existingEmployee.setPhone(employeeRequest.getPhone());
+        existingEmployee.setName(employeeDto.name());
+        existingEmployee.setEmail(employeeDto.email());
+        existingEmployee.setDepartment(employeeDto.department());
+        existingEmployee.setSalary(employeeDto.salary());
+        existingEmployee.setPhone(employeeDto.phone());
 
         Employee updated = employeeRepository.save(existingEmployee);
 
-        return new EmployeeResponseDto(
+        return new EmployeeDto(
                 updated.getId(),
                 updated.getName(),
                 updated.getEmail(),

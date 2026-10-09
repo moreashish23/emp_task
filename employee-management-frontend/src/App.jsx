@@ -1,118 +1,62 @@
-import { useEffect, useState } from "react";
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import ProtectedRoute from './components/common/ProtectedRoute';
+import MainLayout from './components/layout/MainLayout';
+import LoadingSpinner from './components/common/LoadingSpinner';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import EmployeeList from './pages/EmployeeList';
+import AddEmployee from './pages/AddEmployee';
+import EditEmployee from './pages/EditEmployee';
+import EmployeeDetailsPage from './pages/EmployeeDetailsPage';
+import NotFound from './pages/NotFound';
 
-const App = () => {
+const RootRedirect = () => {
+  const { isAuthenticated, loading } = useAuth();
+  
+  if (loading) {
+    return <LoadingSpinner fullScreen text="Loading portal..." />;
+  }
 
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
+  return isAuthenticated ? (
+    <Navigate to="/dashboard" replace />
+  ) : (
+    <Navigate to="/login" replace />
+  );
+};
 
-  const fetchEmployees = async () => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/employees`);
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch employees");
-      }
-
-      const data = await response.json();
-      setEmployees(data);
-    } catch (error) {
-      console.error("Error fetching employees:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchEmployees();
-  }, []);
-
+function App() {
   return (
-    <div className="min-h-screen bg-gray-100 px-6 py-10">
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-      <div className="mx-auto max-w-7xl">
+          
+          <Route path="/" element={<RootRedirect />} />
 
-        <h1 className="mb-6 text-3xl font-bold text-gray-800">
-          Employee Management
-        </h1>
+         
+          <Route
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/employees" element={<EmployeeList />} />
+            <Route path="/employees/add" element={<AddEmployee />} />
+            <Route path="/employees/:id" element={<EmployeeDetailsPage />} />
+            <Route path="/employees/:id/edit" element={<EditEmployee />} />
+          </Route>
 
-        <div className="overflow-hidden rounded-lg bg-white shadow">
-
-          {loading ? (
-            <div className="p-6 text-center text-gray-600">
-              Loading employees...
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-
-              <table className="w-full text-left">
-
-                <thead className="bg-gray-800 text-white">
-                  <tr>
-                    <th className="px-6 py-3">ID</th>
-                    <th className="px-6 py-3">Name</th>
-                    <th className="px-6 py-3">Email</th>
-                    <th className="px-6 py-3">Department</th>
-                    <th className="px-6 py-3">Salary</th>
-                    <th className="px-6 py-3">Phone</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-
-                  {employees.length > 0 ? (
-                    employees.map((employee) => (
-                      <tr
-                        key={employee.id}
-                        className="border-b border-gray-200 hover:bg-gray-50"
-                      >
-                        <td className="px-6 py-4">
-                          {employee.id}
-                        </td>
-
-                        <td className="px-6 py-4 font-medium text-gray-800">
-                          {employee.name}
-                        </td>
-
-                        <td className="px-6 py-4">
-                          {employee.email}
-                        </td>
-
-                        <td className="px-6 py-4">
-                          {employee.department}
-                        </td>
-
-                        <td className="px-6 py-4">
-                          ₹{employee.salary}
-                        </td>
-
-                        <td className="px-6 py-4">
-                          {employee.phone || "-"}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan="6"
-                        className="px-6 py-8 text-center text-gray-500"
-                      >
-                        No employees found
-                      </td>
-                    </tr>
-                  )}
-
-                </tbody>
-
-              </table>
-
-            </div>
-          )}
-
-        </div>
-
-      </div>
-
-    </div>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

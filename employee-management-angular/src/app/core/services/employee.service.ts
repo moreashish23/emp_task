@@ -18,6 +18,7 @@ export class EmployeeService {
    */
   getEmployees(
     keyword: string = '',
+    department: string = '',
     page: number = 0,
     size: number = 10
   ): Observable<Page<Employee>> {
@@ -27,6 +28,10 @@ export class EmployeeService {
 
     if (keyword && keyword.trim().length > 0) {
       params = params.set('keyword', keyword.trim());
+    }
+
+    if (department && department.trim().length > 0) {
+      params = params.set('department', department.trim());
     }
 
     return this.http.get<Page<Employee>>(this.baseUrl, { params });

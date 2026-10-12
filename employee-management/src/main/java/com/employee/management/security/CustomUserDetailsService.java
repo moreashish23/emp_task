@@ -1,7 +1,7 @@
 package com.employee.management.security;
 
-import com.employee.management.document.UserDocument;
-import com.employee.management.repository.es.EsUserRepository;
+import com.employee.management.entity.UserAccount;
+import com.employee.management.repository.UserRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -9,29 +9,29 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
 
-    private final EsUserRepository esUserRepository;
+    private final UserRepository userRepository;
 
-    public CustomUserDetailsService(EsUserRepository esUserRepository) {
-        this.esUserRepository = esUserRepository;
+    public CustomUserDetailsService(UserRepository userRepository) {
+        this.userRepository = userRepository;
     }
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        Optional<UserDocument> esUser = esUserRepository.findByEmail(email);
-        if (esUser.isPresent()) {
-            UserDocument user = esUser.get();
-            return new org.springframework.security.core.userdetails.User(
-                    user.getEmail(),
-                    user.getPasswordHash(),
-                    List.of(new SimpleGrantedAuthority(user.getRole().name()))
-            );
-        }
+        UserAccount user = userRepository.findByEmailIgnoreCase(normalize(email))
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
 
-        throw new UsernameNotFoundException("User not found with email: " + email);
+        return new org.springframework.security.core.userdetails.User(
+                user.getEmail(),
+                user.getPasswordHash(),
+                List.of(new SimpleGrantedAuthority(user.getRole().name())
+        ));
+    }
+
+    private String normalize(String email) {
+        return email == null ? "" : email.trim().toLowerCase(java.util.Locale.ROOT);
     }
 }

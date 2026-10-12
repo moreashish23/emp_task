@@ -60,6 +60,7 @@ public class EmployeeController {
     @GetMapping
     public ResponseEntity<Page<EmployeeDto>> getAllEmployees(
             @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "") String department,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             Authentication authentication) {
@@ -87,7 +88,7 @@ public class EmployeeController {
         String currentUserEmail = authentication != null ? authentication.getName() : "";
 
         Page<EmployeeDto> employees =
-                employeeService.searchEmployees(keyword, pageable, currentUserEmail, isAdmin);
+                employeeService.searchEmployees(keyword, department, pageable, currentUserEmail, isAdmin);
 
         return ResponseEntity.ok(employees);
     }
@@ -122,4 +123,5 @@ public class EmployeeController {
                 HttpStatus.OK
         );
     }
+
 }

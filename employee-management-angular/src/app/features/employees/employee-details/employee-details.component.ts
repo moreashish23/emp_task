@@ -232,11 +232,13 @@ export class EmployeeDetailsComponent implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(
+        const errorMsg =
           err.status === 404
             ? `Employee with ID #${this.id} was not found.`
-            : err.error?.message || 'Failed to fetch employee details.'
-        );
+            : typeof err.error === 'string' && err.error.length > 0
+            ? err.error
+            : err.error?.message || 'Failed to fetch employee details.';
+        this.error.set(errorMsg);
         this.loading.set(false);
       }
     });

@@ -1,260 +1,256 @@
 package com.employee.management.service;
 
-import com.employee.management.document.EmployeeDocument;
-import com.employee.management.document.UserDocument;
 import com.employee.management.dto.EmployeeDto;
+import com.employee.management.document.EmployeeDocument;
+import com.employee.management.entity.Employee;
+import com.employee.management.entity.UserAccount;
 import com.employee.management.exception.ResourceNotFoundException;
-import com.employee.management.repository.es.EsEmailReservationRepository;
-import com.employee.management.repository.es.EsEmployeeRepository;
-import com.employee.management.repository.es.EsMutationJournalRepository;
-import com.employee.management.repository.es.EsUserRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.employee.management.repository.EmployeeRepository;
+import com.employee.management.repository.EmployeeSearchRepository;
+import com.employee.management.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 public class EmployeeService {
 
-    private static final Logger log = LoggerFactory.getLogger(EmployeeService.class);
+    private final EmployeeRepository employeeRepository;
+    private final UserRepository userRepository;
+    private final EmployeeSearchRepository employeeSearchRepository;
 
-    private final EsEmployeeRepository esEmployeeRepository;
-    private final EsUserRepository esUserRepository;
-    private final EsEmailReservationRepository emailReservationRepository;
-    private final EsMutationJournalRepository journalRepository;
-
-    public EmployeeService(
-            EsEmployeeRepository esEmployeeRepository,
-            EsUserRepository esUserRepository,
-            EsEmailReservationRepository emailReservationRepository,
-            EsMutationJournalRepository journalRepository
-    ) {
-        this.esEmployeeRepository = esEmployeeRepository;
-        this.esUserRepository = esUserRepository;
-        this.emailReservationRepository = emailReservationRepository;
-        this.journalRepository = journalRepository;
+    public EmployeeService(EmployeeRepository employeeRepository, UserRepository userRepository,
+                           EmployeeSearchRepository employeeSearchRepository) {
+        this.employeeRepository = employeeRepository;
+        this.userRepository = userRepository;
+        this.employeeSearchRepository = employeeSearchRepository;
     }
 
-    public EmployeeDto createEmployee(EmployeeDto employeeDto) {
-        if (employeeDto.salary() == null || employeeDto.salary() < 0) {
-            throw new IllegalArgumentException("Salary is required and must be non-negative");
-        }
-        if (employeeDto.email() == null || employeeDto.email().isBlank()) {
-            throw new IllegalArgumentException("Email is required");
-        }
-
-        String normalizedEmail = employeeDto.email().trim().toLowerCase(Locale.ROOT);
-        Optional<EmployeeDocument> duplicateEmp = esEmployeeRepository.findByEmail(normalizedEmail);
-        if (duplicateEmp.isPresent()) {
-            throw new IllegalArgumentException("Employee already exists with email: " + employeeDto.email());
+    @Transactional
+    public EmployeeDto createEmployee(EmployeeDto dto) {
+        validateSalary(dto.salary());
+        String email = normalize(dto.email());
+        if (employeeRepository.existsByEmail(email)) {
+            throw new IllegalArgumentException("Employee already exists with email: " + email);
         }
 
-        String empUuid = UUID.randomUUID().toString();
-        String opId = UUID.randomUUID().toString();
-        BigDecimal salary = BigDecimal.valueOf(employeeDto.salary()).setScale(2, RoundingMode.HALF_UP);
-
-        String userId = null;
-        Optional<UserDocument> userOpt = esUserRepository.findByEmail(normalizedEmail);
-        if (userOpt.isPresent()) {
-            userId = userOpt.get().getId();
-            Optional<EmployeeDocument> userEmp = esEmployeeRepository.findByUserId(userId);
-            if (userEmp.isPresent()) {
-                throw new IllegalArgumentException("User with email " + employeeDto.email() + " is already linked to an employee profile");
-            }
-        }
-
+        Long userId = userRepository.findByEmailIgnoreCase(email).map(UserAccount::getId).orElse(null);
         LocalDateTime now = LocalDateTime.now();
-        EmployeeDocument doc = new EmployeeDocument(
-                empUuid, employeeDto.name(), normalizedEmail, employeeDto.department(),
-                salary, employeeDto.phone(), now, now,
-                userId, opId, 1L, Collections.singletonList(opId), null
-        );
-
-        journalRepository.recordPending(
-                opId, "EMPLOYEE", empUuid, 1L, "CREATE",
-                String.format("{\"name\":\"%s\",\"email\":\"%s\",\"department\":\"%s\",\"salary\":%s,\"phone\":\"%s\",\"userId\":%s}",
-                        doc.getName(), doc.getEmail(), doc.getDepartment(), doc.getSalary(), doc.getPhone(),
-                        userId != null ? "\"" + userId + "\"" : "null"),
-                null
-        );
-
-        EmployeeDocument saved = esEmployeeRepository.saveEmployee(doc);
-        journalRepository.markCommitted(opId);
-
-        return toDto(saved, employeeDto.email(), true);
+        Employee employee = new Employee(null, dto.name(), email, dto.department(), dto.salary(), dto.phone(), now, now, userId);
+        Employee saved = employeeRepository.save(employee);
+        indexEmployee(saved);
+        return toDto(saved, email, true);
     }
 
+    @Transactional(readOnly = true)
     public EmployeeDto getById(String id, String currentUserEmail, boolean isAdmin) {
-        Optional<EmployeeDocument> docOpt = esEmployeeRepository.findById(id);
-        if (docOpt.isPresent()) {
-            return toDto(docOpt.get(), currentUserEmail, isAdmin);
-        }
-        throw new ResourceNotFoundException("Employee not found with id: " + id);
+        return toDto(findById(id), currentUserEmail, isAdmin);
     }
 
+    @Transactional(readOnly = true)
     public EmployeeDto getById(Long id, String currentUserEmail, boolean isAdmin) {
-        return getById(id != null ? String.valueOf(id) : null, currentUserEmail, isAdmin);
+        if (id == null) throw new ResourceNotFoundException("Employee id cannot be null");
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
+        return toDto(employee, currentUserEmail, isAdmin);
     }
 
+    @Transactional(readOnly = true)
     public EmployeeDto getEmployeeForUser(String userEmail) {
-        if (userEmail == null || userEmail.isBlank()) {
-            throw new ResourceNotFoundException("User email cannot be blank");
-        }
-
-        Optional<UserDocument> userOpt = esUserRepository.findByEmail(userEmail);
-        if (userOpt.isPresent()) {
-            Optional<EmployeeDocument> empOpt = esEmployeeRepository.findByUserId(userOpt.get().getId());
-            if (empOpt.isPresent()) {
-                return toDto(empOpt.get(), userEmail, false);
-            }
-        }
-
-        Optional<EmployeeDocument> byEmail = esEmployeeRepository.findByEmail(userEmail);
-        if (byEmail.isPresent()) {
-            return toDto(byEmail.get(), userEmail, false);
-        }
-
-        throw new ResourceNotFoundException("No employee profile found for user: " + userEmail);
+        String email = normalize(userEmail);
+        UserAccount user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + email));
+        Employee employee = employeeRepository.findByUserId(user.getId())
+                .or(() -> employeeRepository.findByEmail(email))
+                .orElseThrow(() -> new ResourceNotFoundException("No employee profile found for user: " + email));
+        return toDto(employee, email, false);
     }
 
-    public List<EmployeeDto> getAllEmployees(String currentUserEmail, boolean isAdmin) {
-        return esEmployeeRepository.findAll(0, 500).stream()
-                .map(e -> toDto(e, currentUserEmail, isAdmin))
-                .collect(Collectors.toList());
+    @Transactional(readOnly = true)
+    public Page<EmployeeDto> searchEmployees(String keyword, Pageable pageable, String currentUserEmail, boolean isAdmin) {
+        return searchEmployees(keyword, null, pageable, currentUserEmail, isAdmin);
     }
 
-    public Page<EmployeeDto> searchEmployees(String keyword, Pageable pageable,
-                                              String currentUserEmail, boolean isAdmin) {
-        return esEmployeeRepository.search(keyword, pageable)
-                .map(doc -> toDto(doc, currentUserEmail, isAdmin));
-    }
+    @Transactional(readOnly = true)
+    public Page<EmployeeDto> searchEmployees(String keyword, String department, Pageable pageable, String currentUserEmail, boolean isAdmin) {
+        String kw = keyword == null ? "" : keyword.trim();
+        String dept = department == null ? "" : department.trim();
 
-    public EmployeeDto updateEmployee(String id, EmployeeDto employeeDto,
-                                      String currentUserEmail, boolean isAdmin) {
-        EmployeeDocument existing = esEmployeeRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
+        // 1. Neither keyword nor department: return all from MySQL
+        if (kw.isEmpty() && dept.isEmpty()) {
+            return employeeRepository.findAll(pageable)
+                    .map(employee -> toDto(employee, currentUserEmail, isAdmin));
+        }
 
-        String opId = UUID.randomUUID().toString();
-        if (!isAdmin) {
-            boolean isOwner = false;
-            if (existing.getUserId() != null) {
-                Optional<UserDocument> u = esUserRepository.findById(existing.getUserId());
-                if (u.isPresent() && currentUserEmail.equalsIgnoreCase(u.get().getEmail())) {
-                    isOwner = true;
+        // 2. Only department specified: filter authoritative MySQL by department
+        if (kw.isEmpty()) {
+            return employeeRepository.findByDepartmentIgnoreCase(dept, pageable)
+                    .map(employee -> toDto(employee, currentUserEmail, isAdmin));
+        }
+
+        // 3. Keyword specified (with or without department):
+        // Elasticsearch is responsible for employee-name searching
+        try {
+            if (dept.isEmpty()) {
+                // Name search only: paginate via Elasticsearch and hydrate from MySQL
+                Page<EmployeeDocument> searchPage = employeeSearchRepository
+                        .findByNameContainingIgnoreCase(kw, pageable);
+
+                java.util.List<Long> ids = searchPage.getContent().stream()
+                        .map(doc -> {
+                            try { return Long.parseLong(doc.getId()); } catch (Exception e) { return null; }
+                        })
+                        .filter(java.util.Objects::nonNull)
+                        .toList();
+
+                if (ids.isEmpty()) {
+                    return Page.empty(pageable);
                 }
-            }
-            if (!isOwner) {
-                throw new AccessDeniedException("Access denied: You are only permitted to update your own employee profile.");
-            }
-            existing.setName(employeeDto.name());
-            existing.setDepartment(employeeDto.department());
-            existing.setPhone(employeeDto.phone());
-        } else {
-            existing.setName(employeeDto.name());
-            if (employeeDto.email() != null && !employeeDto.email().isBlank()) {
-                String newEmail = employeeDto.email().trim().toLowerCase(Locale.ROOT);
-                String oldEmail = existing.getEmail() != null ? existing.getEmail().trim().toLowerCase(Locale.ROOT) : "";
-                if (!newEmail.equals(oldEmail)) {
-                    Optional<EmployeeDocument> conflict = esEmployeeRepository.findByEmail(newEmail);
-                    if (conflict.isPresent() && !conflict.get().getId().equals(existing.getId())) {
-                        throw new IllegalArgumentException("Employee already exists with email: " + employeeDto.email());
-                    }
-                    if (existing.getUserId() != null) {
-                        Optional<UserDocument> userOpt = esUserRepository.findById(existing.getUserId());
-                        if (userOpt.isPresent()) {
-                            UserDocument u = userOpt.get();
-                            boolean reserved = emailReservationRepository.reserveEmail(newEmail, u.getId(), opId);
-                            if (!reserved) {
-                                throw new IllegalArgumentException("User account already exists with email: " + employeeDto.email());
-                            }
-                            emailReservationRepository.deleteReservationIfOwned(oldEmail, u.getId(), null);
-                            u.setEmail(newEmail);
-                            esUserRepository.saveUser(u);
+
+                java.util.Map<Long, Employee> employeeMap = employeeRepository.findAllById(ids).stream()
+                        .collect(java.util.stream.Collectors.toMap(Employee::getId, java.util.function.Function.identity()));
+
+                java.util.List<EmployeeDto> dtos = new java.util.ArrayList<>();
+                for (EmployeeDocument doc : searchPage.getContent()) {
+                    try {
+                        Long id = Long.parseLong(doc.getId());
+                        Employee emp = employeeMap.get(id);
+                        if (emp != null) {
+                            dtos.add(toDto(emp, currentUserEmail, isAdmin));
                         }
-                    }
-                    existing.setEmail(newEmail);
+                    } catch (Exception ignored) {}
                 }
+
+                return new org.springframework.data.domain.PageImpl<>(dtos, pageable, searchPage.getTotalElements());
+            } else {
+                // Both name search and department filter:
+                // Find matching employee IDs by name from Elasticsearch, then filter by department in MySQL
+                java.util.List<EmployeeDocument> nameMatches = employeeSearchRepository.findByNameContainingIgnoreCase(kw);
+                if (nameMatches.isEmpty()) {
+                    return Page.empty(pageable);
+                }
+
+                java.util.List<Long> matchingIds = nameMatches.stream()
+                        .map(doc -> {
+                            try { return Long.parseLong(doc.getId()); } catch (Exception e) { return null; }
+                        })
+                        .filter(java.util.Objects::nonNull)
+                        .toList();
+
+                if (matchingIds.isEmpty()) {
+                    return Page.empty(pageable);
+                }
+
+                return employeeRepository.findByIdInAndDepartmentIgnoreCase(matchingIds, dept, pageable)
+                        .map(employee -> toDto(employee, currentUserEmail, isAdmin));
             }
-            existing.setDepartment(employeeDto.department());
-            if (employeeDto.salary() != null) {
-                existing.setSalary(BigDecimal.valueOf(employeeDto.salary()).setScale(2, RoundingMode.HALF_UP));
-            }
-            existing.setPhone(employeeDto.phone());
+        } catch (Exception ex) {
+            // Graceful fallback to MySQL if Elasticsearch encounters an issue
+            return employeeRepository.searchFallback(kw, pageable)
+                    .map(employee -> toDto(employee, currentUserEmail, isAdmin));
+        }
+    }
+
+    @Transactional
+    public EmployeeDto updateEmployee(String id, EmployeeDto dto, String currentUserEmail, boolean isAdmin) {
+        Employee employee = findById(id);
+        String currentEmail = normalize(currentUserEmail);
+
+        if (!isAdmin && !isOwner(employee, currentEmail)) {
+            throw new AccessDeniedException("You can update only your own employee profile");
         }
 
-        existing.setUpdatedAt(LocalDateTime.now());
-        existing.setLastOpId(opId);
-        existing.setEntityVersion(existing.getEntityVersion() != null ? existing.getEntityVersion() + 1 : 2L);
+        employee.setName(dto.name());
+        employee.setDepartment(dto.department());
+        employee.setPhone(dto.phone());
 
-        journalRepository.recordPending(
-                opId, "EMPLOYEE", existing.getId(), existing.getEntityVersion(), "UPDATE",
-                String.format("{\"name\":\"%s\",\"email\":\"%s\",\"department\":\"%s\",\"salary\":%s,\"phone\":\"%s\",\"userId\":%s}",
-                        existing.getName(), existing.getEmail(), existing.getDepartment(), existing.getSalary(), existing.getPhone(),
-                        existing.getUserId() != null ? "\"" + existing.getUserId() + "\"" : "null"),
-                null
-        );
+        if (isAdmin) {
+            if (dto.salary() != null) validateSalary(dto.salary());
+            if (dto.salary() != null) employee.setSalary(dto.salary());
 
-        EmployeeDocument updated = esEmployeeRepository.saveEmployee(existing);
-        journalRepository.markCommitted(opId);
+            String newEmail = normalize(dto.email());
+            String oldEmail = normalize(employee.getEmail());
+            if (!newEmail.equals(oldEmail)) {
+                Optional<Employee> conflict = employeeRepository.findByEmail(newEmail);
+                if (conflict.isPresent() && !conflict.get().getId().equals(employee.getId())) {
+                    throw new IllegalArgumentException("Employee already exists with email: " + newEmail);
+                }
+                if (employee.getUserId() != null) {
+                    UserAccount user = userRepository.findById(employee.getUserId()).orElse(null);
+                    if (user != null && userRepository.existsByEmailIgnoreCase(newEmail)) {
+                        throw new IllegalArgumentException("User already exists with email: " + newEmail);
+                    }
+                    if (user != null) user.setEmail(newEmail);
+                }
+                employee.setEmail(newEmail);
+            }
+        }
 
-        return toDto(updated, currentUserEmail, isAdmin);
+        employee.setUpdatedAt(LocalDateTime.now());
+        Employee saved = employeeRepository.save(employee);
+        indexEmployee(saved);
+        return toDto(saved, currentEmail, isAdmin);
     }
 
-    public EmployeeDto updateEmployee(Long id, EmployeeDto employeeDto,
-                                      String currentUserEmail, boolean isAdmin) {
-        return updateEmployee(id != null ? String.valueOf(id) : null, employeeDto, currentUserEmail, isAdmin);
+    @Transactional
+    public EmployeeDto updateEmployee(Long id, EmployeeDto dto, String currentUserEmail, boolean isAdmin) {
+        if (id == null) throw new ResourceNotFoundException("Employee id cannot be null");
+        return updateEmployee(String.valueOf(id), dto, currentUserEmail, isAdmin);
     }
 
+    @Transactional
     public void deleteEmployee(String id) {
-        EmployeeDocument doc = esEmployeeRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
-
-        String opId = UUID.randomUUID().toString();
-        journalRepository.recordPending(
-                opId, "EMPLOYEE", doc.getId(),
-                doc.getEntityVersion() != null ? doc.getEntityVersion() + 1 : 2L,
-                "DELETE", "{}", null
-        );
-        esEmployeeRepository.deleteById(doc.getId());
-        journalRepository.markCommitted(opId);
+        Employee employee = findById(id);
+        employeeRepository.delete(employee);
+        employeeSearchRepository.deleteById(String.valueOf(employee.getId()));
     }
 
+    @Transactional
     public void deleteEmployee(Long id) {
-        deleteEmployee(id != null ? String.valueOf(id) : null);
+        if (id == null) throw new ResourceNotFoundException("Employee id cannot be null");
+        deleteEmployee(String.valueOf(id));
     }
 
-    private EmployeeDto toDto(EmployeeDocument doc, String currentUserEmail, boolean isAdmin) {
-        boolean isOwner = false;
-        if (currentUserEmail != null && !currentUserEmail.isBlank() && doc.getUserId() != null) {
-            Optional<UserDocument> u = esUserRepository.findById(doc.getUserId());
-            if (u.isPresent() && currentUserEmail.equalsIgnoreCase(u.get().getEmail())) {
-                isOwner = true;
-            }
+    private Employee findById(String id) {
+        if (id == null || id.isBlank()) throw new ResourceNotFoundException("Employee id cannot be blank");
+        try {
+            Long numericId = Long.parseLong(id.trim());
+            return employeeRepository.findById(numericId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
+        } catch (NumberFormatException ex) {
+            throw new ResourceNotFoundException("Invalid employee id: " + id);
         }
+    }
 
-        Double salary = (isAdmin || isOwner) ? (doc.getSalary() != null ? doc.getSalary().doubleValue() : null) : null;
+    private boolean isOwner(Employee employee, String email) {
+        if (employee.getUserId() == null || email.isBlank()) return false;
+        return userRepository.findByEmailIgnoreCase(email)
+                .map(user -> user.getId().equals(employee.getUserId()))
+                .orElse(false);
+    }
 
-        return new EmployeeDto(
-                doc.getId(),
-                doc.getName(),
-                doc.getEmail(),
-                doc.getDepartment(),
-                salary,
-                doc.getPhone(),
-                doc.getCreatedAt(),
-                doc.getUpdatedAt()
-        );
+    private EmployeeDto toDto(Employee employee, String currentUserEmail, boolean isAdmin) {
+        boolean owner = isOwner(employee, normalize(currentUserEmail));
+        Double salary = (isAdmin || owner) ? employee.getSalary() : null;
+        return new EmployeeDto(employee.getId(), employee.getName(), employee.getEmail(), employee.getDepartment(),
+                salary, employee.getPhone(), employee.getCreatedAt(), employee.getUpdatedAt());
+    }
+
+    private void indexEmployee(Employee employee) {
+        employeeSearchRepository.save(new EmployeeDocument(String.valueOf(employee.getId()), employee.getName()));
+    }
+
+    private void validateSalary(Double salary) {
+        if (salary == null || salary < 0) throw new IllegalArgumentException("Salary is required and must be non-negative");
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 }

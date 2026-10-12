@@ -418,7 +418,7 @@ export class EmployeeListComponent implements OnInit {
         ).sort();
         this.uniqueDepartments.set(depts);
       },
-      error: () => {}
+      error: () => { }
     });
   }
 
@@ -426,13 +426,9 @@ export class EmployeeListComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
 
-    // If department filter is selected, we combine it with search term or search by department
-    const effectiveKeyword = this.selectedDepartment
-      ? (this.searchTerm ? `${this.searchTerm} ${this.selectedDepartment}` : this.selectedDepartment)
-      : this.searchTerm;
-
     this.employeeService.getEmployees(
-      effectiveKeyword,
+      this.searchTerm,
+      this.selectedDepartment,
       this.currentPage(),
       this.pageSize()
     ).subscribe({
@@ -453,9 +449,11 @@ export class EmployeeListComponent implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(
-          err.error?.message || err.message || 'Failed to fetch employee list from backend API.'
-        );
+        const errorMsg =
+          typeof err.error === 'string' && err.error.length > 0
+            ? err.error
+            : err.error?.message || err.message || 'Failed to fetch employee list from backend API.';
+        this.error.set(errorMsg);
         this.loading.set(false);
       }
     });

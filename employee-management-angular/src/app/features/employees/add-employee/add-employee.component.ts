@@ -47,6 +47,8 @@ export class AddEmployeeComponent {
       error: (err) => {
         if (err.status === 403) {
           this.apiError.set('Access Denied: Administrative privileges (ROLE_ADMIN) required to create employee records.');
+        } else if (typeof err.error === 'string' && err.error.length > 0) {
+          this.apiError.set(err.error);
         } else if (err.error?.message) {
           this.apiError.set(err.error.message);
         } else if (err.error?.error) {

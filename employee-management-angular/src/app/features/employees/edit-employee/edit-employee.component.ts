@@ -134,9 +134,11 @@ export class EditEmployeeComponent implements OnInit {
         this.router.navigate(['/employees']);
       },
       error: (err) => {
-        this.apiError.set(
-          err.error?.message || err.error?.error || 'Failed to update employee details.'
-        );
+        const errorMsg =
+          typeof err.error === 'string' && err.error.length > 0
+            ? err.error
+            : err.error?.message || err.error?.error || 'Failed to update employee details.';
+        this.apiError.set(errorMsg);
         this.submitting.set(false);
       }
     });

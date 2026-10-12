@@ -1,6 +1,7 @@
 package com.employee.management.exception;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -12,26 +13,33 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    public String handleNotFound(ResourceNotFoundException ex ) {
+    public String handleNotFound(ResourceNotFoundException ex) {
         return ex.getMessage();
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public String handleAccessDenied(AccessDeniedException ex) {
+        return ex.getMessage() != null && !ex.getMessage().isBlank()
+                ? ex.getMessage()
+                : "Access denied: You do not have permission to perform this action";
     }
 
     @ExceptionHandler(BadCredentialsException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
-    public String handleBadCredentials( BadCredentialsException ex ) {
+    public String handleBadCredentials(BadCredentialsException ex) {
         return "Invalid email or password";
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public String handleIllegalArgument(IllegalArgumentException ex)
-    {
+    public String handleIllegalArgument(IllegalArgumentException ex) {
         return ex.getMessage();
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public String handleValidation(MethodArgumentNotValidException ex ) {
+    public String handleValidation(MethodArgumentNotValidException ex) {
 
         return ex.getBindingResult()
                 .getFieldErrors()

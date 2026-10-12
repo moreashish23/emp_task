@@ -1,7 +1,7 @@
 package com.employee.management.security;
 
-import com.employee.management.entity.User;
-import com.employee.management.repository.UserRepository;
+import com.employee.management.document.UserDocument;
+import com.employee.management.repository.es.EsUserRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -9,31 +9,29 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
 
-    private final UserRepository userRepository;
+    private final EsUserRepository esUserRepository;
 
-    public CustomUserDetailsService(UserRepository userRepository) {
-        this.userRepository = userRepository;
+    public CustomUserDetailsService(EsUserRepository esUserRepository) {
+        this.esUserRepository = esUserRepository;
     }
 
     @Override
-    public UserDetails loadUserByUsername(String email)
-            throws UsernameNotFoundException {
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        Optional<UserDocument> esUser = esUserRepository.findByEmail(email);
+        if (esUser.isPresent()) {
+            UserDocument user = esUser.get();
+            return new org.springframework.security.core.userdetails.User(
+                    user.getEmail(),
+                    user.getPasswordHash(),
+                    List.of(new SimpleGrantedAuthority(user.getRole().name()))
+            );
+        }
 
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(
-                        () -> new UsernameNotFoundException(
-                                "User not found with email: " + email
-                        )
-                );
-
-        return new org.springframework.security.core.userdetails.User(
-                user.getEmail(),
-                user.getPassword(),
-                List.of(new SimpleGrantedAuthority(user.getRole()))
-        );
+        throw new UsernameNotFoundException("User not found with email: " + email);
     }
 }

@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 
 public record EmployeeDto(
 
-        Long id,
+        String id,
 
         @NotBlank(message = "Name is required")
         @Size(min = 2, max = 50, message = "Name must be between 2 and 50 characters")
@@ -24,8 +24,7 @@ public record EmployeeDto(
         @NotBlank(message = "Department is required")
         String department,
 
-        @NotNull(message = "Salary is required")
-        @Min(value = 1, message = "Salary must be greater than 0")
+        @Min(value = 0, message = "Salary must be non-negative")
         Double salary,
 
         @Pattern(
@@ -38,4 +37,7 @@ public record EmployeeDto(
 
         LocalDateTime updatedAt
 ) {
+    public EmployeeDto(long numericId, String name, String email, String department, Double salary, String phone, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this(String.valueOf(numericId), name, email, department, salary, phone, createdAt, updatedAt);
+    }
 }

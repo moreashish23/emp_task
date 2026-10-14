@@ -69,6 +69,7 @@ import { AuthService } from '../../core/services/auth.service';
           <span>Dashboard</span>
         </a>
 
+        @if (isAdmin()) {
         <a
           routerLink="/employees"
           routerLinkActive="bg-blue-600 text-white shadow-md shadow-blue-900/30"
@@ -79,6 +80,7 @@ import { AuthService } from '../../core/services/auth.service';
           <svg lucideUsers class="w-5 h-5"></svg>
           <span>Employees List</span>
         </a>
+        }
 
         @if (isAdmin()) {
           <a
@@ -92,9 +94,9 @@ import { AuthService } from '../../core/services/auth.service';
           </a>
         }
 
-        @if (isEmployee() && myEmployeeId()) {
+        @if (isEmployee()) {
           <a
-            [routerLink]="['/employees', myEmployeeId()]"
+            routerLink="/my-profile"
             routerLinkActive="bg-blue-600 text-white shadow-md shadow-blue-900/30"
             (click)="closeSidebar()"
             class="flex items-center space-x-3 px-3.5 py-2.5 rounded-lg font-medium text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-all duration-150"

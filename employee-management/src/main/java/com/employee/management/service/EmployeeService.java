@@ -11,6 +11,7 @@ import com.employee.management.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,25 +25,31 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
     private final EmployeeSearchRepository employeeSearchRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public EmployeeService(EmployeeRepository employeeRepository, UserRepository userRepository,
-                           EmployeeSearchRepository employeeSearchRepository) {
+                           EmployeeSearchRepository employeeSearchRepository, PasswordEncoder passwordEncoder) {
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
         this.employeeSearchRepository = employeeSearchRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional
     public EmployeeDto createEmployee(EmployeeDto dto) {
         validateSalary(dto.salary());
         String email = normalize(dto.email());
-        if (employeeRepository.existsByEmail(email)) {
-            throw new IllegalArgumentException("Employee already exists with email: " + email);
+        if (dto.password() == null || dto.password().isBlank() || dto.password().length() < 8) {
+            throw new IllegalArgumentException("Initial password is required and must contain at least 8 characters");
+        }
+        if (employeeRepository.existsByEmail(email) || userRepository.existsByEmailIgnoreCase(email)) {
+            throw new IllegalArgumentException("An employee or login account already exists with email: " + email);
         }
 
-        Long userId = userRepository.findByEmailIgnoreCase(email).map(UserAccount::getId).orElse(null);
+        UserAccount account = new UserAccount(email, passwordEncoder.encode(dto.password()), com.employee.management.enums.Role.ROLE_EMP);
+        UserAccount savedAccount = userRepository.save(account);
         LocalDateTime now = LocalDateTime.now();
-        Employee employee = new Employee(null, dto.name(), email, dto.department(), dto.salary(), dto.phone(), now, now, userId);
+        Employee employee = new Employee(null, dto.name(), email, dto.department(), dto.salary(), dto.phone(), now, now, savedAccount.getId());
         Employee saved = employeeRepository.save(employee);
         indexEmployee(saved);
         return toDto(saved, email, true);
@@ -159,12 +166,11 @@ public class EmployeeService {
 
     @Transactional
     public EmployeeDto updateEmployee(String id, EmployeeDto dto, String currentUserEmail, boolean isAdmin) {
+        if (!isAdmin) {
+            throw new AccessDeniedException("Only administrators can update employee records");
+        }
         Employee employee = findById(id);
         String currentEmail = normalize(currentUserEmail);
-
-        if (!isAdmin && !isOwner(employee, currentEmail)) {
-            throw new AccessDeniedException("You can update only your own employee profile");
-        }
 
         employee.setName(dto.name());
         employee.setDepartment(dto.department());
@@ -189,6 +195,24 @@ public class EmployeeService {
                     if (user != null) user.setEmail(newEmail);
                 }
                 employee.setEmail(newEmail);
+            }
+
+            if (dto.password() != null && !dto.password().isBlank()) {
+                if (dto.password().length() < 8) {
+                    throw new IllegalArgumentException("Password must contain at least 8 characters");
+                }
+
+                UserAccount account = employee.getUserId() == null
+                        ? userRepository.findByEmailIgnoreCase(normalize(employee.getEmail())).orElse(null)
+                        : userRepository.findById(employee.getUserId()).orElse(null);
+
+                if (account == null) {
+                    throw new ResourceNotFoundException(
+                            "No login account is linked to employee: " + employee.getEmail());
+                }
+
+                account.setPasswordHash(passwordEncoder.encode(dto.password()));
+                userRepository.save(account);
             }
         }
 

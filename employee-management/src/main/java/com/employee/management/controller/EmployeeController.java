@@ -44,6 +44,7 @@ public class EmployeeController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<EmployeeDto> getEmployeeById(
             @PathVariable String id,
             Authentication authentication) {
@@ -58,6 +59,7 @@ public class EmployeeController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Page<EmployeeDto>> getAllEmployees(
             @RequestParam(defaultValue = "") String keyword,
             @RequestParam(defaultValue = "") String department,
@@ -94,6 +96,7 @@ public class EmployeeController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<EmployeeDto> updateEmployee(
             @PathVariable String id,
             @Valid @RequestBody EmployeeDto employeeDto,

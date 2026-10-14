@@ -1,7 +1,7 @@
 import { Component, signal, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, ActivatedRoute, RouterLink } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { LucideBriefcase, LucideMail, LucideLock, LucideAlertCircle } from '@lucide/angular';
 import { AuthService } from '../../../core/services/auth.service';
 import { InputFieldComponent } from '../../../shared/components/input-field/input-field.component';
@@ -14,7 +14,6 @@ import { validateEmail } from '../../../shared/utils/formatters';
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     LucideBriefcase,
     LucideMail,
     LucideLock,
@@ -101,14 +100,6 @@ import { validateEmail } from '../../../shared/utils/formatters';
             </div>
           </form>
 
-          <div class="mt-6 text-center border-t border-slate-100 pt-6">
-            <p class="text-sm text-slate-600">
-              Don't have an account?
-              <a routerLink="/register" class="font-semibold text-blue-600 hover:text-blue-500 ml-1">
-                Register here
-              </a>
-            </p>
-          </div>
         </div>
       </div>
     </div>
@@ -164,7 +155,11 @@ export class LoginComponent implements OnInit {
       password: this.password
     }).subscribe({
       next: () => {
-        this.router.navigateByUrl(returnUrl);
+        const destination = this.authService.isAdmin()
+          ? (returnUrl === '/my-profile' ? '/dashboard' : returnUrl)
+          : '/dashboard';
+          
+        this.router.navigateByUrl(destination);
       },
       error: (err) => {
         if (err.status === 401 || err.status === 403) {

@@ -1,5 +1,6 @@
 import { Component, OnInit, signal, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Observable } from 'rxjs';
 import { RouterLink } from '@angular/router';
 import {
   LucideShield,
@@ -76,7 +77,7 @@ import { ButtonComponent } from '../../shared/components/button/button.component
             }
 
             @if (isEmployee() && myEmployeeId()) {
-              <a [routerLink]="['/employees', myEmployeeId()]">
+              <a routerLink="/my-profile">
                 <app-button variant="primary">
                   <svg lucideUsers class="w-4 h-4 mr-2" icon></svg>
                   My Profile
@@ -102,6 +103,7 @@ import { ButtonComponent } from '../../shared/components/button/button.component
           </div>
         }
 
+        @if (isAdmin()) {
         <!-- Key Metric Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <!-- Total Employees Card -->
@@ -296,6 +298,22 @@ import { ButtonComponent } from '../../shared/components/button/button.component
             </div>
           </div>
         </div>
+        } @else {
+          <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
+            <h2 class="text-lg font-bold text-slate-900">My Profile</h2>
+            @if (employees().length > 0) {
+              <div class="mt-4 space-y-2 text-sm text-slate-700">
+                <p><strong>Name:</strong> {{ employees()[0].name }}</p>
+                <p><strong>Email:</strong> {{ employees()[0].email }}</p>
+                <p><strong>Department:</strong> {{ employees()[0].department }}</p>
+                <p><strong>Phone:</strong> {{ employees()[0].phone || 'Not provided' }}</p>
+              </div>
+              <a routerLink="/my-profile" class="inline-block mt-4 text-sm font-semibold text-blue-600">View Profile Details</a>
+            } @else {
+              <p class="mt-3 text-sm text-slate-500">Your employee profile is not linked to this login account. Please contact the administrator.</p>
+            }
+          </div>
+        }
       </div>
     }
   `
@@ -364,6 +382,14 @@ export class DashboardComponent implements OnInit {
   });
 
   protected userFirstName(): string {
+    if (this.isEmployee()) {
+      const employeeName = this.employees()[0]?.name?.trim();
+
+      if (employeeName) {
+        return employeeName.split(/\s+/)[0];
+      }
+    }
+
     const email = this.user()?.email;
     return email ? email.split('@')[0] : 'User';
   }
@@ -381,13 +407,19 @@ export class DashboardComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
 
-    this.employeeService.getAllEmployeesForDashboard(100).subscribe({
+    const request: Observable<any> = this.isAdmin()
+      ? this.employeeService.getAllEmployeesForDashboard(100)
+      : this.employeeService.getMyProfile();
+
+    request.subscribe({
       next: (res: any) => {
-        const list = Array.isArray(res) ? res : (res?.content ?? []);
+        const list = this.isAdmin()
+          ? (Array.isArray(res) ? res : (res?.content ?? []))
+          : (res ? [res] : []);
         this.employees.set(list);
         this.loading.set(false);
       },
-      error: (err) => {
+      error: (err: any) => {
         this.error.set(
           err.error?.message || err.message || 'Failed to load dashboard metrics from server.'
         );

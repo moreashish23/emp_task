@@ -78,20 +78,19 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        .requestMatchers("/api/auth/register").denyAll()
                         .requestMatchers(
-                                "/api/auth/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // Restrict create, delete, and sync operations to ROLE_ADMIN
-                        .requestMatchers(HttpMethod.POST, "/api/employees", "/api/employees/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/employees/**").hasRole("ADMIN")
+                        // Employees may access only their own profile endpoint.
+                        .requestMatchers(HttpMethod.GET, "/api/employees/me").hasAnyRole("ADMIN", "EMP")
 
-                        // Restrict employee reads and updates to authenticated roles
-                        .requestMatchers(HttpMethod.GET, "/api/employees/**").hasAnyRole("ADMIN", "EMP")
-                        .requestMatchers(HttpMethod.PUT, "/api/employees/**").hasAnyRole("ADMIN", "EMP")
+                        // Every other employee endpoint is admin-only.
+                        .requestMatchers("/api/employees", "/api/employees/**").hasRole("ADMIN")
 
                         .anyRequest().authenticated()
                 )

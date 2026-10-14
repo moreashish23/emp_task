@@ -50,7 +50,7 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
           </div>
           <h3 class="text-lg font-bold text-slate-900">Record Not Available</h3>
           <p class="text-slate-500 text-sm mt-2 mb-6">{{ error() }}</p>
-          <a routerLink="/employees">
+          <a [routerLink]="isAdmin() ? '/employees' : '/dashboard'">
             <app-button variant="primary">
               <svg lucideArrowLeft class="w-4 h-4 mr-2" icon></svg>
               Return to Employee Directory
@@ -71,14 +71,16 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
                   <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-200 border border-blue-400/30">
                     {{ emp.department || 'Employee' }}
                   </span>
-                  <span>•</span>
-                  <span>ID: #{{ emp.id }}</span>
+                  @if (isAdmin()) {
+                    <span>•</span>
+                    <span>ID: #{{ emp.id }}</span>
+                  }
                 </p>
               </div>
             </div>
 
             <div class="flex items-center space-x-3 w-full sm:w-auto">
-              <a routerLink="/employees">
+              <a [routerLink]="isAdmin() ? '/employees' : '/dashboard'">
                 <app-button variant="outline" class="bg-white/10 text-white hover:bg-white/20 border-white/20">
                   <svg lucideArrowLeft class="w-4 h-4 mr-2" icon></svg>
                   Back
@@ -102,6 +104,7 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
             </h3>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              @if (isAdmin()) {
               <!-- Employee ID -->
               <div class="flex items-start space-x-3.5 p-4 rounded-lg bg-slate-50/70 border border-slate-100">
                 <div class="p-2.5 rounded-lg bg-white border border-slate-200 text-slate-600 shadow-xs">
@@ -112,6 +115,8 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
                   <p class="text-base font-semibold mt-0.5 text-slate-800">#{{ emp.id }}</p>
                 </div>
               </div>
+
+              }
 
               <!-- Full Name -->
               <div class="flex items-start space-x-3.5 p-4 rounded-lg bg-slate-50/70 border border-slate-100">
@@ -146,7 +151,7 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
                 </div>
               </div>
 
-              <!-- Annual Salary -->
+              <!-- Annual Salary: visible to the employee for their own profile and to admins -->
               <div class="flex items-start space-x-3.5 p-4 rounded-lg bg-slate-50/70 border border-slate-100">
                 <div class="p-2.5 rounded-lg bg-white border border-slate-200 text-slate-600 shadow-xs">
                   <svg lucideDollarSign class="w-5 h-5 text-blue-600"></svg>
@@ -156,7 +161,7 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
                   @if (emp.salary !== null && emp.salary !== undefined) {
                     <p class="text-base font-bold mt-0.5 text-blue-600">{{ formatCurrencyVal(emp.salary) }}</p>
                   } @else {
-                    <p class="text-base font-semibold mt-0.5 text-slate-500">Confidential</p>
+                    <p class="text-base font-semibold mt-0.5 text-slate-500">Not Available</p>
                   }
                 </div>
               </div>
@@ -172,6 +177,7 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
                 </div>
               </div>
 
+              @if (isAdmin()) {
               <!-- Record Created -->
               <div class="flex items-start space-x-3.5 p-4 rounded-lg bg-slate-50/70 border border-slate-100">
                 <div class="p-2.5 rounded-lg bg-white border border-slate-200 text-slate-600 shadow-xs">
@@ -183,6 +189,9 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
                 </div>
               </div>
 
+              }
+
+              @if (isAdmin()) {
               <!-- Last Updated -->
               <div class="flex items-start space-x-3.5 p-4 rounded-lg bg-slate-50/70 border border-slate-100">
                 <div class="p-2.5 rounded-lg bg-white border border-slate-200 text-slate-600 shadow-xs">
@@ -193,6 +202,8 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
                   <p class="text-base font-semibold mt-0.5 text-slate-800">{{ formatDateVal(emp.updatedAt) }}</p>
                 </div>
               </div>
+              }
+
             </div>
           </div>
         </div>
@@ -217,9 +228,27 @@ export class EmployeeDetailsComponent implements OnInit {
 
   ngOnInit(): void {
     this.id = this.route.snapshot.paramMap.get('id') || '';
-    if (this.id) {
+    if (this.route.snapshot.routeConfig?.path === 'my-profile') {
+      this.fetchMyProfile();
+    } else if (this.id) {
       this.fetchEmployee();
     }
+  }
+
+  private fetchMyProfile(): void {
+    this.loading.set(true);
+    this.error.set(null);
+    this.employeeService.getMyProfile().subscribe({
+      next: (data) => {
+        this.employee.set(data);
+        this.id = data.id;
+        this.loading.set(false);
+      },
+      error: (err) => {
+        this.error.set(err.error?.message || 'Failed to fetch your employee profile.');
+        this.loading.set(false);
+      }
+    });
   }
 
   private fetchEmployee(): void {
@@ -244,11 +273,8 @@ export class EmployeeDetailsComponent implements OnInit {
     });
   }
 
-  protected canEdit(emp: Employee): boolean {
-    if (this.isAdmin()) return true;
-    if (this.myEmployeeId() && String(emp.id) === String(this.myEmployeeId())) return true;
-    if (this.currentUser()?.email && emp.email === this.currentUser()?.email) return true;
-    return false;
+  protected canEdit(_emp: Employee): boolean {
+    return this.isAdmin();
   }
 
   protected formatCurrencyVal(amount?: number | null): string {

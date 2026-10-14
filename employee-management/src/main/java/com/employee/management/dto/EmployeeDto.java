@@ -1,5 +1,6 @@
 package com.employee.management.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -35,9 +36,12 @@ public record EmployeeDto(
 
         LocalDateTime createdAt,
 
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+
+        @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+        String password
 ) {
     public EmployeeDto(long numericId, String name, String email, String department, Double salary, String phone, LocalDateTime createdAt, LocalDateTime updatedAt) {
-        this(String.valueOf(numericId), name, email, department, salary, phone, createdAt, updatedAt);
+        this(String.valueOf(numericId), name, email, department, salary, phone, createdAt, updatedAt, null);
     }
 }

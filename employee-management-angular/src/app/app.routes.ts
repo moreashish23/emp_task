@@ -31,6 +31,7 @@ export const routes: Routes = [
       },
       {
         path: 'employees',
+        canActivate: [adminGuard],
         loadComponent: () =>
           import('./features/employees/employee-list/employee-list.component').then(
             (m) => m.EmployeeListComponent
@@ -46,6 +47,7 @@ export const routes: Routes = [
       },
       {
         path: 'employees/:id',
+        canActivate: [adminGuard],
         loadComponent: () =>
           import('./features/employees/employee-details/employee-details.component').then(
             (m) => m.EmployeeDetailsComponent
@@ -53,10 +55,17 @@ export const routes: Routes = [
       },
       {
         path: 'employees/:id/edit',
+        canActivate: [adminGuard],
         loadComponent: () =>
           import('./features/employees/edit-employee/edit-employee.component').then(
             (m) => m.EditEmployeeComponent
           )
+      },
+      {
+        path: 'my-profile',
+        loadComponent: () =>
+          import('./features/employees/employee-details/employee-details.component')
+            .then((m) => m.EmployeeDetailsComponent)
       }
     ]
   },

@@ -15,4 +15,5 @@ export interface EmployeePayload {
   department: string;
   salary?: number | null;
   phone?: string | null;
+  password?: string;
 }

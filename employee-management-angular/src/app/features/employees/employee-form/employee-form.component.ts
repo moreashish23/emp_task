@@ -76,6 +76,31 @@ import { validateEmail, validatePhone } from '../../../shared/utils/formatters';
           <svg lucideMail class="w-5 h-5 text-slate-400" icon></svg>
         </app-input-field>
 
+        @if (!isEdit()) {
+          <app-input-field
+            label="Initial Password"
+            name="password"
+            type="password"
+            [(ngModel)]="password"
+            placeholder="Enter initial login password (minimum 8 characters)"
+            [required]="true"
+            [error]="errors().password"
+            [disabled]="isLoading()"
+          ></app-input-field>
+        } @else {
+          <app-input-field
+            label="Reset Password (optional)"
+            name="password"
+            type="password"
+            [(ngModel)]="password"
+            placeholder="Leave blank to keep the current password"
+            [required]="false"
+            [error]="errors().password"
+            [disabled]="isLoading()"
+            helperText="Enter a new password only if you want to reset it (minimum 8 characters)."
+          ></app-input-field>
+        }
+
         <!-- Department -->
         <app-input-field
           label="Department"
@@ -160,6 +185,7 @@ export class EmployeeFormComponent implements OnInit {
 
   protected name = '';
   protected email = '';
+  protected password = '';
   protected department = '';
   protected salary = '';
   protected phone = '';
@@ -170,6 +196,7 @@ export class EmployeeFormComponent implements OnInit {
     department?: string | null;
     salary?: string | null;
     phone?: string | null;
+    password?: string | null;
   }>({});
 
   constructor() {
@@ -215,6 +242,16 @@ export class EmployeeFormComponent implements OnInit {
       newErrors['department'] = 'Department is required';
     }
 
+    if (!this.isEdit()) {
+      if (!this.password.trim()) {
+        newErrors['password'] = 'Initial password is required';
+      } else if (this.password.length < 8) {
+        newErrors['password'] = 'Password must contain at least 8 characters';
+      }
+    } else if (this.password.trim() && this.password.length < 8) {
+      newErrors['password'] = 'New password must contain at least 8 characters';
+    }
+
     if (!this.isSalaryDisabled()) {
       if (!this.salary || !this.salary.toString().trim()) {
         newErrors['salary'] = 'Salary is required';
@@ -241,7 +278,8 @@ export class EmployeeFormComponent implements OnInit {
       email: this.email.trim(),
       department: this.department.trim(),
       salary: this.salary !== '' && !isNaN(Number(this.salary)) ? Number(this.salary) : null,
-      phone: this.phone.trim() ? this.phone.trim() : null
+      phone: this.phone.trim() ? this.phone.trim() : null,
+      ...(this.password.trim() ? { password: this.password } : {})
     };
 
     this.formSubmit.emit(payload);

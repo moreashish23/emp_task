@@ -48,9 +48,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(
-            HttpSecurity http
-    ) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
                 .csrf(csrf -> csrf.disable())
@@ -86,10 +84,10 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // Employees may access only their own profile endpoint.
                         .requestMatchers(HttpMethod.GET, "/api/employees/me").hasAnyRole("ADMIN", "EMP")
+                        .requestMatchers(HttpMethod.GET, "/api/employees", "/api/employees/**").hasAnyRole("ADMIN", "EMP")
 
-                        // Every other employee endpoint is admin-only.
+                        // Employee creation, updates, and deletion remain admin-only.
                         .requestMatchers("/api/employees", "/api/employees/**").hasRole("ADMIN")
 
                         .anyRequest().authenticated()

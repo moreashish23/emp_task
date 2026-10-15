@@ -7,8 +7,10 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.security.core.userdetails.User;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
@@ -24,7 +26,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         UserAccount user = userRepository.findByEmailIgnoreCase(normalize(email))
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
 
-        return new org.springframework.security.core.userdetails.User(
+        return new User(
                 user.getEmail(),
                 user.getPasswordHash(),
                 List.of(new SimpleGrantedAuthority(user.getRole().name())
@@ -32,6 +34,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     private String normalize(String email) {
-        return email == null ? "" : email.trim().toLowerCase(java.util.Locale.ROOT);
+        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
     }
+
 }

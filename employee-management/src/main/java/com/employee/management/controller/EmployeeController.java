@@ -27,12 +27,13 @@ public class EmployeeController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<EmployeeDto> createEmployee(
+    public ResponseEntity<String> createEmployee(
             @Valid @RequestBody EmployeeDto employeeDto) {
 
-        EmployeeDto employee = employeeService.createEmployee(employeeDto);
+        employeeService.createEmployee(employeeDto);
 
-        return new ResponseEntity<>(employee, HttpStatus.CREATED);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body("Employee added successfully.");
     }
 
     @GetMapping("/me")
@@ -44,7 +45,7 @@ public class EmployeeController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMP')")
     public ResponseEntity<EmployeeDto> getEmployeeById(
             @PathVariable String id,
             Authentication authentication) {
@@ -59,7 +60,7 @@ public class EmployeeController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMP')")
     public ResponseEntity<Page<EmployeeDto>> getAllEmployees(
             @RequestParam(defaultValue = "") String keyword,
             @RequestParam(defaultValue = "") String department,
@@ -97,7 +98,7 @@ public class EmployeeController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<EmployeeDto> updateEmployee(
+    public ResponseEntity<String> updateEmployee(
             @PathVariable String id,
             @Valid @RequestBody EmployeeDto employeeDto,
             Authentication authentication
@@ -108,10 +109,9 @@ public class EmployeeController {
 
         String currentUserEmail = authentication != null ? authentication.getName() : "";
 
-        EmployeeDto employee =
-                employeeService.updateEmployee(id, employeeDto, currentUserEmail, isAdmin);
+        employeeService.updateEmployee(id, employeeDto, currentUserEmail, isAdmin);
 
-        return new ResponseEntity<>(employee, HttpStatus.OK);
+        return ResponseEntity.ok("Employee updated successfully.");
     }
 
     @DeleteMapping("/{id}")
@@ -122,7 +122,7 @@ public class EmployeeController {
         employeeService.deleteEmployee(id);
 
         return new ResponseEntity<>(
-                "Employee deleted successfully",
+                "Employee deleted successfully.",
                 HttpStatus.OK
         );
     }

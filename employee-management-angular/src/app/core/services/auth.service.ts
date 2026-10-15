@@ -106,6 +106,10 @@ export class AuthService {
     );
   }
 
+  changePassword(currentPassword: string, newPassword: string): Observable<string> {
+    return this.http.put(`${this.baseUrl}/auth/change-password`, { currentPassword, newPassword }, { responseType: 'text' });
+  }
+
   register(userData: RegisterRequest): Observable<string> {
     this._loading.set(true);
     return this.http

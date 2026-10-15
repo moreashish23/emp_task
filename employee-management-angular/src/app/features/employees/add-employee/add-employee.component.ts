@@ -23,6 +23,7 @@ import { EmployeeFormComponent } from '../employee-form/employee-form.component'
       <app-employee-form
         (formSubmit)="handleSubmit($event)"
         (formCancel)="navigateBack()"
+        [useDefaultPassword]="true"
         [isLoading]="submitting()"
         [apiError]="apiError()"
       ></app-employee-form>
@@ -41,8 +42,8 @@ export class AddEmployeeComponent {
     this.apiError.set(null);
 
     this.employeeService.createEmployee(employeeData).subscribe({
-      next: () => {
-        this.router.navigate(['/employees']);
+      next: (message) => {
+        this.router.navigate(['/employees'], { state: { successMessage: message || 'Employee added successfully.' } });
       },
       error: (err) => {
         if (err.status === 403) {

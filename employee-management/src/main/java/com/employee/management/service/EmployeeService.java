@@ -14,10 +14,12 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.PageImpl;
 
 import java.time.LocalDateTime;
-import java.util.Locale;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.function.Function;
 
 @Service
 public class EmployeeService {
@@ -39,14 +41,11 @@ public class EmployeeService {
     public EmployeeDto createEmployee(EmployeeDto dto) {
         validateSalary(dto.salary());
         String email = normalize(dto.email());
-        if (dto.password() == null || dto.password().isBlank() || dto.password().length() < 8) {
-            throw new IllegalArgumentException("Initial password is required and must contain at least 8 characters");
-        }
         if (employeeRepository.existsByEmail(email) || userRepository.existsByEmailIgnoreCase(email)) {
             throw new IllegalArgumentException("An employee or login account already exists with email: " + email);
         }
 
-        UserAccount account = new UserAccount(email, passwordEncoder.encode(dto.password()), com.employee.management.enums.Role.ROLE_EMP);
+        UserAccount account = new UserAccount(email, passwordEncoder.encode("Emp@123"), com.employee.management.enums.Role.ROLE_EMP);
         UserAccount savedAccount = userRepository.save(account);
         LocalDateTime now = LocalDateTime.now();
         Employee employee = new Employee(null, dto.name(), email, dto.department(), dto.salary(), dto.phone(), now, now, savedAccount.getId());
@@ -61,14 +60,6 @@ public class EmployeeService {
     }
 
     @Transactional(readOnly = true)
-    public EmployeeDto getById(Long id, String currentUserEmail, boolean isAdmin) {
-        if (id == null) throw new ResourceNotFoundException("Employee id cannot be null");
-        Employee employee = employeeRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + id));
-        return toDto(employee, currentUserEmail, isAdmin);
-    }
-
-    @Transactional(readOnly = true)
     public EmployeeDto getEmployeeForUser(String userEmail) {
         String email = normalize(userEmail);
         UserAccount user = userRepository.findByEmailIgnoreCase(email)
@@ -79,10 +70,6 @@ public class EmployeeService {
         return toDto(employee, email, false);
     }
 
-    @Transactional(readOnly = true)
-    public Page<EmployeeDto> searchEmployees(String keyword, Pageable pageable, String currentUserEmail, boolean isAdmin) {
-        return searchEmployees(keyword, null, pageable, currentUserEmail, isAdmin);
-    }
 
     @Transactional(readOnly = true)
     public Page<EmployeeDto> searchEmployees(String keyword, String department, Pageable pageable, String currentUserEmail, boolean isAdmin) {
@@ -92,13 +79,13 @@ public class EmployeeService {
         // 1. Neither keyword nor department: return all from MySQL
         if (kw.isEmpty() && dept.isEmpty()) {
             return employeeRepository.findAll(pageable)
-                    .map(employee -> toDto(employee, currentUserEmail, isAdmin));
+                    .map(employee -> toDirectoryDto(employee, isAdmin));
         }
 
         // 2. Only department specified: filter authoritative MySQL by department
         if (kw.isEmpty()) {
             return employeeRepository.findByDepartmentIgnoreCase(dept, pageable)
-                    .map(employee -> toDto(employee, currentUserEmail, isAdmin));
+                    .map(employee -> toDirectoryDto(employee, isAdmin));
         }
 
         // 3. Keyword specified (with or without department):
@@ -109,45 +96,52 @@ public class EmployeeService {
                 Page<EmployeeDocument> searchPage = employeeSearchRepository
                         .findByNameContainingIgnoreCase(kw, pageable);
 
-                java.util.List<Long> ids = searchPage.getContent().stream()
+                List<Long> ids = searchPage.getContent().stream()
                         .map(doc -> {
-                            try { return Long.parseLong(doc.getId()); } catch (Exception e) { return null; }
+                            try {
+                                return Long.parseLong(doc.getId());
+                            } catch (Exception e) {
+                                return null;
+                            }
                         })
-                        .filter(java.util.Objects::nonNull)
+                        .filter(Objects::nonNull)
                         .toList();
 
                 if (ids.isEmpty()) {
                     return Page.empty(pageable);
                 }
 
-                java.util.Map<Long, Employee> employeeMap = employeeRepository.findAllById(ids).stream()
-                        .collect(java.util.stream.Collectors.toMap(Employee::getId, java.util.function.Function.identity()));
+                Map<Long, Employee> employeeMap = employeeRepository.findAllById(ids).stream()
+                        .collect(Collectors.toMap(Employee::getId, Function.identity()));
 
-                java.util.List<EmployeeDto> dtos = new java.util.ArrayList<>();
+                List<EmployeeDto> dtos = new ArrayList<>();
                 for (EmployeeDocument doc : searchPage.getContent()) {
                     try {
                         Long id = Long.parseLong(doc.getId());
                         Employee emp = employeeMap.get(id);
                         if (emp != null) {
-                            dtos.add(toDto(emp, currentUserEmail, isAdmin));
+                            dtos.add(toDirectoryDto(emp, isAdmin));
                         }
                     } catch (Exception ignored) {}
                 }
 
-                return new org.springframework.data.domain.PageImpl<>(dtos, pageable, searchPage.getTotalElements());
+                return new PageImpl<>(dtos, pageable, searchPage.getTotalElements());
             } else {
-                // Both name search and department filter:
                 // Find matching employee IDs by name from Elasticsearch, then filter by department in MySQL
-                java.util.List<EmployeeDocument> nameMatches = employeeSearchRepository.findByNameContainingIgnoreCase(kw);
+                List<EmployeeDocument> nameMatches = employeeSearchRepository.findByNameContainingIgnoreCase(kw);
                 if (nameMatches.isEmpty()) {
                     return Page.empty(pageable);
                 }
 
-                java.util.List<Long> matchingIds = nameMatches.stream()
+                List<Long> matchingIds = nameMatches.stream()
                         .map(doc -> {
-                            try { return Long.parseLong(doc.getId()); } catch (Exception e) { return null; }
+                            try {
+                                return Long.parseLong(doc.getId());
+                            } catch (Exception e) {
+                                return null;
+                            }
                         })
-                        .filter(java.util.Objects::nonNull)
+                        .filter(Objects::nonNull)
                         .toList();
 
                 if (matchingIds.isEmpty()) {
@@ -155,12 +149,12 @@ public class EmployeeService {
                 }
 
                 return employeeRepository.findByIdInAndDepartmentIgnoreCase(matchingIds, dept, pageable)
-                        .map(employee -> toDto(employee, currentUserEmail, isAdmin));
+                        .map(employee -> toDirectoryDto(employee, isAdmin));
             }
         } catch (Exception ex) {
             // Graceful fallback to MySQL if Elasticsearch encounters an issue
             return employeeRepository.searchFallback(kw, pageable)
-                    .map(employee -> toDto(employee, currentUserEmail, isAdmin));
+                    .map(employee -> toDirectoryDto(employee, isAdmin));
         }
     }
 
@@ -197,23 +191,7 @@ public class EmployeeService {
                 employee.setEmail(newEmail);
             }
 
-            if (dto.password() != null && !dto.password().isBlank()) {
-                if (dto.password().length() < 8) {
-                    throw new IllegalArgumentException("Password must contain at least 8 characters");
-                }
 
-                UserAccount account = employee.getUserId() == null
-                        ? userRepository.findByEmailIgnoreCase(normalize(employee.getEmail())).orElse(null)
-                        : userRepository.findById(employee.getUserId()).orElse(null);
-
-                if (account == null) {
-                    throw new ResourceNotFoundException(
-                            "No login account is linked to employee: " + employee.getEmail());
-                }
-
-                account.setPasswordHash(passwordEncoder.encode(dto.password()));
-                userRepository.save(account);
-            }
         }
 
         employee.setUpdatedAt(LocalDateTime.now());
@@ -222,11 +200,6 @@ public class EmployeeService {
         return toDto(saved, currentEmail, isAdmin);
     }
 
-    @Transactional
-    public EmployeeDto updateEmployee(Long id, EmployeeDto dto, String currentUserEmail, boolean isAdmin) {
-        if (id == null) throw new ResourceNotFoundException("Employee id cannot be null");
-        return updateEmployee(String.valueOf(id), dto, currentUserEmail, isAdmin);
-    }
 
     @Transactional
     public void deleteEmployee(String id) {
@@ -235,11 +208,7 @@ public class EmployeeService {
         employeeSearchRepository.deleteById(String.valueOf(employee.getId()));
     }
 
-    @Transactional
-    public void deleteEmployee(Long id) {
-        if (id == null) throw new ResourceNotFoundException("Employee id cannot be null");
-        deleteEmployee(String.valueOf(id));
-    }
+
 
     private Employee findById(String id) {
         if (id == null || id.isBlank()) throw new ResourceNotFoundException("Employee id cannot be blank");
@@ -264,6 +233,12 @@ public class EmployeeService {
         Double salary = (isAdmin || owner) ? employee.getSalary() : null;
         return new EmployeeDto(employee.getId(), employee.getName(), employee.getEmail(), employee.getDepartment(),
                 salary, employee.getPhone(), employee.getCreatedAt(), employee.getUpdatedAt());
+    }
+
+    private EmployeeDto toDirectoryDto(Employee employee, boolean isAdmin) {
+        return new EmployeeDto(String.valueOf(employee.getId()), employee.getName(), employee.getEmail(),
+                employee.getDepartment(), isAdmin ? employee.getSalary() : null, employee.getPhone(),
+                employee.getCreatedAt(), employee.getUpdatedAt(), null);
     }
 
     private void indexEmployee(Employee employee) {

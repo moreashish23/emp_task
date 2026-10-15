@@ -1,5 +1,6 @@
 package com.employee.management.controller;
 
+import com.employee.management.dto.ChangePasswordRequest;
 import com.employee.management.dto.LoginRequest;
 import com.employee.management.dto.LoginResponse;
 import com.employee.management.dto.RegisterRequest;
@@ -8,6 +9,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -30,6 +32,14 @@ public class AuthController {
                 message,
                 HttpStatus.CREATED
         );
+    }
+
+    @PutMapping("/change-password")
+    public ResponseEntity<String> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            Authentication authentication) {
+        authService.changePassword(authentication.getName(), request);
+        return ResponseEntity.ok("Password changed successfully");
     }
 
     @PostMapping("/login")

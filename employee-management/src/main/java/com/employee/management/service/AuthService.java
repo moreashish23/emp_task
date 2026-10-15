@@ -1,5 +1,6 @@
 package com.employee.management.service;
 
+import com.employee.management.dto.ChangePasswordRequest;
 import com.employee.management.dto.LoginRequest;
 import com.employee.management.dto.LoginResponse;
 import com.employee.management.dto.RegisterRequest;
@@ -73,6 +74,23 @@ public class AuthService {
         }
         employeeRepository.save(employee);
         return "User registered successfully";
+    }
+
+    @Transactional
+    public void changePassword(String authenticatedEmail, ChangePasswordRequest request) {
+        String email = authenticatedEmail == null ? "" : authenticatedEmail.trim().toLowerCase(Locale.ROOT);
+        UserAccount user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalArgumentException("Authenticated user account was not found"));
+
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("Current password is incorrect");
+        }
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("New password must be different from the current password");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
     }
 
     public LoginResponse login(LoginRequest request) {

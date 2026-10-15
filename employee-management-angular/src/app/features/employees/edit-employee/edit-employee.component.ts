@@ -39,16 +39,6 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
         </app-button>
       </div>
     } @else {
-
-      @if (successMessage()) {
-          <div
-            class="rounded-lg border border-green-200 bg-green-50 p-4 text-green-700"
-            role="status"
-          >
-            {{ successMessage() }}
-          </div>
-      }
-
       <div class="max-w-4xl mx-auto space-y-6">
         <div>
           <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -69,8 +59,6 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
           (formSubmit)="handleSubmit($event)"
           (formCancel)="navigateBack()"
         ></app-employee-form>
-
-        
       </div>
     }
   `
@@ -92,7 +80,6 @@ export class EditEmployeeComponent implements OnInit {
   protected readonly submitting = signal<boolean>(false);
   protected readonly fetchError = signal<string | null>(null);
   protected readonly apiError = signal<string | null>(null);
-  protected readonly successMessage = signal<string | null>(null);
 
   ngOnInit(): void {
     this.id = this.route.snapshot.paramMap.get('id') || '';
@@ -143,20 +130,13 @@ export class EditEmployeeComponent implements OnInit {
     };
 
     this.employeeService.updateEmployee(this.id, payload).subscribe({
-      next: (updatedEmployee) => {
-        this.initialData.set(updatedEmployee);
-        this.successMessage.set('Employee updated successfully.');
-        this.submitting.set(false);
+      next: (message) => {
+        this.router.navigate(['/employees'], { state: { successMessage: message || 'Employee updated successfully.' } });
       },
       error: (err) => {
-        const errorMsg =
-          typeof err.error === 'string' && err.error.length > 0
-            ? err.error
-            : err.error?.message ||
-              err.error?.error ||
-              'Failed to update employee details.';
-
-        this.apiError.set(errorMsg);
+        this.apiError.set(
+          err.error?.message || err.error?.error || 'Failed to update employee details.'
+        );
         this.submitting.set(false);
       }
     });

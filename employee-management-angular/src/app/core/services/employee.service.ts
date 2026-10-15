@@ -14,7 +14,7 @@ export class EmployeeService {
 
   /**
    * Search and paginate employees from the backend.
-   * GET /api/employees?keyword={keyword}&page={page}&size={size}
+   * GET /api/employees?keyword={keyword}&department={department}&page={page}&size={size}
    */
   getEmployees(
     keyword: string = '',
@@ -68,16 +68,16 @@ export class EmployeeService {
    * Create a new employee.
    * POST /api/employees
    */
-  createEmployee(employeeData: EmployeePayload): Observable<Employee> {
-    return this.http.post<Employee>(this.baseUrl, employeeData);
+  createEmployee(employeeData: EmployeePayload): Observable<string> {
+    return this.http.post(this.baseUrl, employeeData, { responseType: 'text' });
   }
 
   /**
    * Update an existing employee.
    * PUT /api/employees/{id}
    */
-  updateEmployee(id: number | string, employeeData: EmployeePayload): Observable<Employee> {
-    return this.http.put<Employee>(`${this.baseUrl}/${id}`, employeeData);
+  updateEmployee(id: number | string, employeeData: EmployeePayload): Observable<string> {
+    return this.http.put(`${this.baseUrl}/${id}`, employeeData, { responseType: 'text' });
   }
 
   /**

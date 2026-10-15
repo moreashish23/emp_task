@@ -76,29 +76,21 @@ import { validateEmail, validatePhone } from '../../../shared/utils/formatters';
           <svg lucideMail class="w-5 h-5 text-slate-400" icon></svg>
         </app-input-field>
 
-        @if (!isEdit()) {
+        @if (!isEdit() && !useDefaultPassword()) {
           <app-input-field
             label="Initial Password"
             name="password"
             type="password"
             [(ngModel)]="password"
-            placeholder="Enter initial login password (minimum 8 characters)"
+            placeholder="Enter initial login password"
             [required]="true"
             [error]="errors().password"
             [disabled]="isLoading()"
           ></app-input-field>
-        } @else {
-          <app-input-field
-            label="Reset Password (optional)"
-            name="password"
-            type="password"
-            [(ngModel)]="password"
-            placeholder="Leave blank to keep the current password"
-            [required]="false"
-            [error]="errors().password"
-            [disabled]="isLoading()"
-            helperText="Enter a new password only if you want to reset it (minimum 8 characters)."
-          ></app-input-field>
+        } @else if (!isEdit()) {
+          <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+            Default login password: <strong>Emp@123</strong>. The employee can change it after logging in.
+          </div>
         }
 
         <!-- Department -->
@@ -175,6 +167,7 @@ import { validateEmail, validatePhone } from '../../../shared/utils/formatters';
 export class EmployeeFormComponent implements OnInit {
   readonly initialValues = input<Employee | null>(null);
   readonly isEdit = input<boolean>(false);
+  readonly useDefaultPassword = input<boolean>(false);
   readonly isLoading = input<boolean>(false);
   readonly apiError = input<string | null>(null);
   readonly isSalaryDisabled = input<boolean>(false);
@@ -242,13 +235,13 @@ export class EmployeeFormComponent implements OnInit {
       newErrors['department'] = 'Department is required';
     }
 
-    if (!this.isEdit()) {
+    if (!this.isEdit() && !this.useDefaultPassword()) {
       if (!this.password.trim()) {
         newErrors['password'] = 'Initial password is required';
       } else if (this.password.length < 8) {
         newErrors['password'] = 'Password must contain at least 8 characters';
       }
-    } else if (this.password.trim() && this.password.length < 8) {
+    } else if (!this.isEdit() && this.password.trim() && this.password.length < 8) {
       newErrors['password'] = 'New password must contain at least 8 characters';
     }
 
@@ -279,7 +272,7 @@ export class EmployeeFormComponent implements OnInit {
       department: this.department.trim(),
       salary: this.salary !== '' && !isNaN(Number(this.salary)) ? Number(this.salary) : null,
       phone: this.phone.trim() ? this.phone.trim() : null,
-      ...(this.password.trim() ? { password: this.password } : {})
+      ...(!this.isEdit() && this.password.trim() ? { password: this.password } : {})
     };
 
     this.formSubmit.emit(payload);

@@ -1,7 +1,7 @@
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import {
   LucideUserPlus,
   LucideRefreshCw,
@@ -196,7 +196,9 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
                   <th class="px-6 py-4">ID</th>
                   <th class="px-6 py-4">Employee</th>
                   <th class="px-6 py-4">Department</th>
-                  <th class="px-6 py-4">Salary</th>
+                  @if (isAdmin()) {
+                    <th class="px-6 py-4">Salary</th>
+                  }
                   <th class="px-6 py-4">Phone</th>
                   <th class="px-6 py-4 text-right">Actions</th>
                 </tr>
@@ -230,16 +232,16 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
                       </span>
                     </td>
 
-                    <!-- Formatted Salary -->
-                    <td class="px-6 py-4 font-medium text-slate-800">
-                      @if (emp.salary !== null && emp.salary !== undefined) {
-                        {{ formatCurrencyVal(emp.salary) }}
-                      } @else {
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">
-                          Confidential
-                        </span>
-                      }
-                    </td>
+                    <!-- Salary is visible only to administrators in the employee directory. -->
+                    @if (isAdmin()) {
+                      <td class="px-6 py-4 font-medium text-slate-800">
+                        @if (emp.salary !== null && emp.salary !== undefined) {
+                          {{ formatCurrencyVal(emp.salary) }}
+                        } @else {
+                          <span class="text-slate-400">Not available</span>
+                        }
+                      </td>
+                    }
 
                     <!-- Phone -->
                     <td class="px-6 py-4 text-slate-600">
@@ -265,8 +267,8 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
                           <svg lucideEye class="w-4 h-4"></svg>
                         </a>
 
-                        <!-- Edit Action: Admin or own profile -->
-                        @if (canEdit(emp)) {
+                        <!-- Edit Action: Admin only -->
+                        @if (isAdmin()) {
                           <a
                             [routerLink]="['/employees', emp.id, 'edit']"
                             class="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
@@ -369,11 +371,9 @@ import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialo
 export class EmployeeListComponent implements OnInit {
   private readonly employeeService = inject(EmployeeService);
   private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
 
   readonly isAdmin = this.authService.isAdmin;
-  readonly isEmployee = this.authService.isEmployee;
-  readonly myEmployeeId = this.authService.myEmployeeId;
-  readonly currentUser = this.authService.user;
 
   protected readonly employees = signal<Employee[]>([]);
   protected readonly loading = signal<boolean>(true);
@@ -405,6 +405,10 @@ export class EmployeeListComponent implements OnInit {
   private searchDebounceTimer: any;
 
   ngOnInit(): void {
+    const navigationState = this.router.getCurrentNavigation()?.extras.state ?? history.state;
+    if (typeof navigationState?.['successMessage'] === 'string') {
+      this.successMessage.set(navigationState['successMessage']);
+    }
     this.fetchEmployees();
     this.loadDepartmentOptions();
   }
@@ -532,8 +536,8 @@ export class EmployeeListComponent implements OnInit {
     this.deleteModal.update((s) => ({ ...s, isDeleting: true }));
 
     this.employeeService.deleteEmployee(emp.id).subscribe({
-      next: () => {
-        this.successMessage.set(`Employee "${emp.name}" was deleted successfully.`);
+      next: (message) => {
+        this.successMessage.set(message || `Employee "${emp.name}" was deleted successfully.`);
         this.closeDeleteModal();
         this.fetchEmployees();
         setTimeout(() => this.successMessage.set(''), 3000);
@@ -545,13 +549,6 @@ export class EmployeeListComponent implements OnInit {
         this.closeDeleteModal();
       }
     });
-  }
-
-  protected canEdit(emp: Employee): boolean {
-    if (this.isAdmin()) return true;
-    if (this.myEmployeeId() && String(emp.id) === String(this.myEmployeeId())) return true;
-    if (this.currentUser()?.email && emp.email === this.currentUser()?.email) return true;
-    return false;
   }
 
   protected formatCurrencyVal(salary?: number | null): string {

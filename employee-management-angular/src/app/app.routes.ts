@@ -31,7 +31,6 @@ export const routes: Routes = [
       },
       {
         path: 'employees',
-        canActivate: [adminGuard],
         loadComponent: () =>
           import('./features/employees/employee-list/employee-list.component').then(
             (m) => m.EmployeeListComponent
@@ -47,7 +46,6 @@ export const routes: Routes = [
       },
       {
         path: 'employees/:id',
-        canActivate: [adminGuard],
         loadComponent: () =>
           import('./features/employees/employee-details/employee-details.component').then(
             (m) => m.EmployeeDetailsComponent
@@ -66,6 +64,12 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/employees/employee-details/employee-details.component')
             .then((m) => m.EmployeeDetailsComponent)
+      },
+      {
+        path: 'change-password',
+        loadComponent: () =>
+          import('./features/auth/change-password/change-password.component')
+            .then((m) => m.ChangePasswordComponent)
       }
     ]
   },
